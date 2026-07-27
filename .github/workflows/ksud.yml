@@ -49,7 +49,7 @@ jobs:
     - name: Prepare ksuinit
       if: ${{ inputs.pack_ksuinit }}
       run: |
-        find ksuinit -type f -name 'ksuinit' -exec cp {} ./userspace/ksud/bin/aarch64/ \;
+        find . -type f -name 'ksuinit' -not -path './userspace/*' -exec cp {} ./userspace/ksud/bin/aarch64/ \;
         
     - name: Setup rustup
       run: |
