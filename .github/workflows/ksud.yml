@@ -32,15 +32,6 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v7
 
-    - name: Debug list downloaded artifacts
-      run: |
-        echo "== current directory =="
-        pwd
-        echo "== top-level listing =="
-        ls -la
-        echo "== recursive find for ksuinit =="
-        find . -iname '*ksuinit*' 2>/dev/null
-
     - name: Prepare LKM fies
       if: ${{ inputs.pack_lkm }}
       run: |
