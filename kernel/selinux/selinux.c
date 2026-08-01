@@ -25,6 +25,59 @@ static u32 cached_zygote_sid __read_mostly = 0;
 static u32 cached_init_sid __read_mostly = 0;
 u32 ksu_file_sid __read_mostly = 0;
 
+/* BATCH PATCH FOR APP_ZYGOTE ORACLE DETECTOR */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
+struct lsm_context_internal {
+    char *context;
+    u32 len;
+};
+#endif
+
+static bool is_caller_app_zygote(void)
+{
+    const struct cred *cred = current_cred();
+    if (!cred) return false;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+    const struct task_security_struct *tsec = selinux_cred(cred);
+#define LSM_TSEC_TYPE const struct task_security_struct
+#else
+    const struct cred_security_struct *tsec = selinux_cred(cred);
+#define LSM_TSEC_TYPE const struct cred_security_struct
+#endif
+
+    if (!tsec) return false;
+
+    // Cara Cepat: Cek jika SID saat ini cocok dengan Zygote bawaan
+    if (likely(cached_zygote_sid != 0) && tsec->sid == cached_zygote_sid) {
+        return true;
+    }
+
+    // Cara Lambat: Fallback deteksi via pembacaan string konteks "app_zygote"
+    char *ctx_buf = NULL;
+    u32 ctx_len = 0;
+    bool match = false;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
+    if (security_secid_to_secctx(tsec->sid, &ctx_buf, &ctx_len) == 0) {
+        if (ctx_buf && strnstr(ctx_buf, "app_zygote", ctx_len)) {
+            match = true;
+        }
+        security_release_secctx(ctx_buf, ctx_len);
+    }
+#else
+    struct lsm_context lsm_ctx;
+    if (security_secid_to_secctx(tsec->sid, &lsm_ctx) == 0) {
+        if (lsm_ctx.context && strnstr(lsm_ctx.context, "app_zygote", lsm_ctx.len)) {
+            match = true;
+        }
+        security_release_secctx(&lsm_ctx);
+    }
+#endif
+    return match;
+}
+/* END OF BATCH PATCH */
+
 static int transive_to_domain(const char *domain, struct cred *cred, bool clear_exec_sid)
 {
     u32 sid;
@@ -209,11 +262,19 @@ static bool is_sid_match(const struct cred *cred, u32 cached_sid,
 
 bool is_task_ksu_domain(const struct cred *cred)
 {
+    /* MODIFIKASI: Jika dipanggil oleh app_zygote, sembunyikan domain KSU */
+    if (is_caller_app_zygote()) {
+        return false;
+    }
     return is_sid_match(cred, cached_su_sid, KERNEL_SU_CONTEXT);
 }
 
 bool is_ksu_domain(void)
 {
+    /* MODIFIKASI: Sembunyikan jika pemanggil aslinya terindikasi app_zygote */
+    if (is_caller_app_zygote()) {
+        return false;
+    }
     return is_task_ksu_domain(current_cred());
 }
 
@@ -225,6 +286,11 @@ bool is_ksu_domain_fast(void)
 #else
     const struct cred_security_struct *tsec;
 #endif
+
+    /* MODIFIKASI: Bypass pengecekan cepat jika diakses dari sandbox app_zygote */
+    if (is_caller_app_zygote()) {
+        return false;
+    }
 
     if (unlikely(!cached_su_sid || !cred)) {
         return false;
