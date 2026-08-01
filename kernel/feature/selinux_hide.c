@@ -387,23 +387,7 @@ static void ksu_hide_filter_access_decision(struct av_decision *avd,
                         "fsck_untrusted", "capability", "sys_admin");
     ksu_hide_clear_perm(avd, scon, tcon, tclass, "adbd",
                         "adbroot", "binder", "call");
-	ksu_hide_clear_perm(avd, scon, tcon, tclass, "su",
-                        "droidspacesd", "process", "dyntransition");
 	ksu_hide_clear_perm(avd, scon, tcon, tclass, "system_server",
-                        "droidspacesd", "binder", "call");
-	ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_app",
-                        "msd_daemon", "unix_stream_socket", "connectto");
-	ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_daemon",
-                        "msd_daemon", "unix_stream_socket", "connectto");
-	ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_daemon",
-                        "selinuxfs", "filesystem", "read");
-    ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_daemon",
-                        "selinuxfs", "file", "read");
-	ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_daemon",
-                        "configfs", "dir", "search");
-	ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_daemon",
-                        "configfs", "file", "write");
-    ksu_hide_clear_perm(avd, scon, tcon, tclass, "system_server",
                         "system_server", "process", "execmem");
     ksu_hide_clear_perm_for_sources(avd, scon, tcon, tclass,
                                     app_query_sources,
@@ -429,7 +413,23 @@ static void ksu_hide_filter_access_decision(struct av_decision *avd,
                                     app_query_sources,
                                     ARRAY_SIZE(app_query_sources),
                                     "droidspaces", "process", "transition");
-    ksu_hide_clear_perm(avd, scon, tcon, tclass, "dex2oat",
+    ksu_hide_clear_perm(avd, scon, tcon, tclass, "su",
+                        "droidspacesd", "process", "dyntransition");
+	ksu_hide_clear_perm(avd, scon, tcon, tclass, "system_server",
+                        "droidspacesd", "binder", "call");
+	ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_app",
+                        "msd_daemon", "unix_stream_socket", "connectto");
+	ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_daemon",
+                        "msd_daemon", "unix_stream_socket", "connectto");
+	ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_daemon",
+                        "selinuxfs", "filesystem", "read");
+    ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_daemon",
+                        "selinuxfs", "file", "read");
+	ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_daemon",
+                        "configfs", "dir", "search");
+	ksu_hide_clear_perm(avd, scon, tcon, tclass, "msd_daemon",
+                        "configfs", "file", "write");
+	ksu_hide_clear_perm(avd, scon, tcon, tclass, "dex2oat",
                         "dex2oat_exec", "file", "execute_no_trans");
     ksu_hide_clear_perm(avd, scon, tcon, tclass, "kernel",
                         "adb_data_file", "file", "read");
