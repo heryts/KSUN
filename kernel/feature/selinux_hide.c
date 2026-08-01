@@ -7,7 +7,6 @@
 #include <linux/memory.h>
 #include <linux/uaccess.h>
 #include <linux/init.h>
-#include <linux/kernel.h>
 #include <linux/printk.h>
 #include <linux/string.h>
 #include <linux/fs.h>
@@ -38,6 +37,8 @@
 static DEFINE_MUTEX(selinux_hide_mutex);
 static bool ksu_selinux_hide_enabled __read_mostly = false;
 static bool ksu_selinux_hide_running __read_mostly = false;
+
+static DEFINE_STATIC_KEY_FALSE(fake_status_initialize_key);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
 static inline void *ksu_symtab_search(struct symtab *s, const char *name) {
@@ -95,24 +96,30 @@ static inline struct page *ksu_get_status_page(void) {
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+static void (*security_dump_masked_av_fn)(struct policydb *policydb, struct context *scontext, struct context *tcontext,
+                                          u16 tclass, u32 permissions, const char *reason) = NULL;
+static void (*context_struct_compute_av_fn)(struct policydb *policydb, struct context *scontext,
+                                            struct context *tcontext, u16 tclass, struct av_decision *avd,
+                                            struct extended_perms *xperms) = NULL;
+
 static inline int ksu_hide_context_to_sid(const char *scontext,
-					  u32 scontext_len, u32 *sid,
-					  u32 def_sid, gfp_t gfp_flags)
+                      u32 scontext_len, u32 *sid,
+                      u32 def_sid, gfp_t gfp_flags)
 {
-	return security_context_to_sid_default(scontext, scontext_len, sid,
-					       def_sid, gfp_flags);
+    return security_context_to_sid_default(scontext, scontext_len, sid,
+                           def_sid, gfp_flags);
 }
 
 static inline int ksu_hide_sid_to_context(u32 sid, char **scontext,
-					  u32 *scontext_len)
+                      u32 *scontext_len)
 {
-	return security_sid_to_context(sid, scontext, scontext_len);
+    return security_sid_to_context(sid, scontext, scontext_len);
 }
 
 static inline void ksu_hide_compute_av_user(u32 ssid, u32 tsid, u16 tclass,
-					    struct av_decision *avd)
+                        struct av_decision *avd)
 {
-	security_compute_av_user(ssid, tsid, tclass, avd);
+    security_compute_av_user(ssid, tsid, tclass, avd);
 }
 
 #elif defined(KSU_COMPAT_USE_SELINUX_STATE)
@@ -445,6 +452,8 @@ static void initialize_fake_status(void)
     ksu_hide_sanitize_status(new_status);
 
     fake_status = new_page;
+    pr_info("initialize_fake_status initialized: sequence=%d, policyload=%d, enforcing=%d\n", 
+            new_status->sequence, new_status->policyload, new_status->enforcing);
 out:
     mutex_unlock(status_lock);
 }
@@ -464,8 +473,8 @@ static struct page *ksu_selinux_hide_status_page_for_current(void)
 
 typedef int (*sel_open_handle_status_fn)(struct inode *inode, struct file *filp);
 typedef ssize_t (*sel_read_handle_status_fn)(struct file *filp,
-                                             char __user *buf,
-                                             size_t count, loff_t *ppos);
+                                              char __user *buf,
+                                              size_t count, loff_t *ppos);
 static sel_open_handle_status_fn orig_sel_open_handle_status, *sel_open_handle_status_slot;
 static sel_read_handle_status_fn orig_sel_read_handle_status, *sel_read_handle_status_slot;
 
@@ -479,14 +488,14 @@ static int my_sel_open_handle_status(struct inode *inode, struct file *filp)
     }
 
     int ret = orig_sel_open_handle_status(inode, filp);
-    if (!ret && !fake_status) {
+    if (static_branch_unlikely(&fake_status_initialize_key) && !ret && !fake_status) {
         initialize_fake_status();
     }
     return ret;
 }
 
 static ssize_t my_sel_read_handle_status(struct file *filp, char __user *buf,
-                                         size_t count, loff_t *ppos)
+                                          size_t count, loff_t *ppos)
 {
     struct page *status = ksu_selinux_hide_status_page_for_current();
 
@@ -808,28 +817,38 @@ static int ksu_selinux_hide_enable(void)
     pr_info("selinux_hide: init selinux hide\n");
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) || defined(KSU_COMPAT_HAS_SELINUX_POLICY_STRUCT)
-    if (!backup_sepolicy) return -EAGAIN;
+    if (!backup_sepolicy) {
+        pr_err("no backup sepolicy available, please save feature and reboot to retry!\n");
+        return -EAGAIN;
+    }
 #else
     if (!backup_policydb || !backup_sidtab) return -EAGAIN;
 #endif
 
     hook_selinux_status();
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) || defined(KSU_COMPAT_HAS_SELINUX_POLICY_STRUCT)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+    security_dump_masked_av_fn = find_kernel_symbol_exact("security_dump_masked_av");
+    if (!security_dump_masked_av_fn) {
+        pr_warn("security_dump_masked_av not found!\n");
+    }
+    context_struct_compute_av_fn = find_kernel_symbol_exact("context_struct_compute_av");
+    if (!context_struct_compute_av_fn) {
+        pr_warn("context_struct_compute_av not found!\n");
+    }
 #elif defined(KSU_COMPAT_USE_SELINUX_STATE)
-	if (!fake_state.ss) {
-		fake_state.ss = kzalloc(sizeof(*fake_state.ss), GFP_KERNEL);
-		if (!fake_state.ss)
-			return -ENOMEM;
+    if (!fake_state.ss) {
+        fake_state.ss = kzalloc(sizeof(*fake_state.ss), GFP_KERNEL);
+        if (!fake_state.ss)
+            return -ENOMEM;
 
-		/* SID hash chains include entries embedded in backup_sidtab. */
-		fake_state.ss->sidtab = backup_sidtab;
-		memcpy(&fake_state.ss->policydb, backup_policydb,
-		       sizeof(struct policydb));
-		fake_state.ss->latest_granting = KSU_SELINUX_POLICYLOAD_SEQNO;
-		rwlock_init(&fake_state.ss->policy_rwlock);
-		fake_state.initialized = true;
-	}
+        fake_state.ss->sidtab = backup_sidtab;
+        memcpy(&fake_state.ss->policydb, backup_policydb,
+               sizeof(struct policydb));
+        fake_state.ss->latest_granting = KSU_SELINUX_POLICYLOAD_SEQNO;
+        rwlock_init(&fake_state.ss->policy_rwlock);
+        fake_state.initialized = true;
+    }
 #endif
 
 #ifdef CONFIG_KALLSYMS_ALL
@@ -838,23 +857,37 @@ static int ksu_selinux_hide_enable(void)
     extern ssize_t (*const write_op[])(struct file *, char *, size_t);
     selinux_write_op = (write_op_fn *)&write_op;
 #endif
-    if (!selinux_write_op) return -ENOSYS;
+    if (!selinux_write_op) {
+        pr_err("selinux_hide: no write_op found!\n");
+        return -ENOSYS;
+    }
 
     context_write = &selinux_write_op[SEL_CONTEXT];
+    pr_info("selinux_hide: context_write: 0x%lx [%pSb]\n", (unsigned long)*context_write, *context_write);
     orig_context_write = *context_write;
     write_op_fn my_ctx = my_write_context;
     ret = ksu_patch_text(context_write, &my_ctx, sizeof(my_ctx), KSU_PATCH_TEXT_FLUSH_DCACHE);
-    if (ret) goto unhook;
+    if (ret) {
+        pr_err("selinux_hide: init: patch_text context_write err: %d\n", ret);
+        goto unhook;
+    }
 
     access_write = &selinux_write_op[SEL_ACCESS];
+    pr_info("selinux_hide: access_write: 0x%lx [%pSb]\n", (unsigned long)*access_write, *access_write);
     orig_access_write = *access_write;
     write_op_fn my_acc = my_write_access;
     ret = ksu_patch_text(access_write, &my_acc, sizeof(my_acc), KSU_PATCH_TEXT_FLUSH_DCACHE);
-    if (ret) goto unhook;
+    if (ret) {
+        pr_err("selinux_hide: init: patch_text access_write err: %d\n", ret);
+        goto unhook;
+    }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
     ret = ksu_lsm_hook(&selinux_setprocattr_hook);
-    if (ret) goto unhook;
+    if (ret) {
+        pr_err("selinux_hide: init: selinux_setprocattr_hook err: %d\n", ret);
+        goto unhook;
+    }
 #else
     hook_legacy_setprocattr();
 #endif
@@ -883,6 +916,7 @@ static int selinux_hide_feature_set(u64 value)
     bool enable = value != 0;
     int ret = 0;
     
+    pr_info("selinux_hide: set to %d\n", enable);
     mutex_lock(&selinux_hide_mutex);
     if (enable) {
         if (!ksu_selinux_hide_running) {
@@ -912,13 +946,35 @@ static const struct ksu_feature_handler selinux_hide_handler = {
     .set_handler = selinux_hide_feature_set,
 };
 
-void ksu_selinux_hide_handle_second_stage(void) { initialize_fake_status(); }
-void ksu_selinux_hide_handle_post_fs_data(void) { }
+void ksu_selinux_hide_handle_second_stage(void) 
+{ 
+    initialize_fake_status(); 
+    if (fake_status) {
+        static_key_disable(&fake_status_initialize_key.key);
+    } else {
+        pr_warn("selinux_hide: fake status need late initialization\n");
+    }
+}
+
+void ksu_selinux_hide_handle_post_fs_data(void) 
+{ 
+    static_key_disable(&fake_status_initialize_key.key);
+    if (!fake_status) {
+        pr_err("selinux_hide: fake status is not initialized after post-fs-data!\n");
+    }
+}
 
 void __init ksu_selinux_hide_init(void)
 {
-    ksu_register_feature_handler(&selinux_hide_handler);
-    if (ksu_late_loaded) initialize_fake_status();
+    if (ksu_register_feature_handler(&selinux_hide_handler)) {
+        pr_err("Failed to register selinux_hide feature handler\n");
+    }
+    if (ksu_late_loaded) {
+        initialize_fake_status();
+    } else {
+        static_key_enable(&fake_status_initialize_key.key);
+    }
+    hook_selinux_status();
 }
 
 void __exit ksu_selinux_hide_exit(void)
@@ -945,6 +1001,7 @@ void ksu_selinux_hide_drop_backup_if_unused(void)
     mutex_lock(&selinux_hide_mutex);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) || defined(KSU_COMPAT_HAS_SELINUX_POLICY_STRUCT)
     if (!ksu_selinux_hide_running && backup_sepolicy) {
+        pr_info("selinux_hide is not enabled - drop backup_sepolicy\n");
         sidtab_destroy(backup_sepolicy->sidtab);
         kfree(backup_sepolicy->sidtab);
         ksu_destroy_sepolicy(backup_sepolicy);
