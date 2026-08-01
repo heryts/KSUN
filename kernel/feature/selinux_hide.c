@@ -362,12 +362,6 @@ static void ksu_hide_filter_access_decision(struct av_decision *avd,
                                             const char *scon,
                                             const char *tcon, u16 tclass)
 {
-	if ((scon && (strstr(scon, "sentinel") || strstr(scon, "oracle") || strstr(scon, "test_") || strstr(scon, "dummy"))) ||
-        (tcon && (strstr(tcon, "sentinel") || strstr(tcon, "oracle") || strstr(tcon, "test_") || strstr(tcon, "dummy")))) {
-        
-        avd->allowed = 0;
-        return;
-    }
 	
     static const char * const app_query_sources[] = {
         "untrusted_app",
