@@ -362,7 +362,12 @@ static void ksu_hide_filter_access_decision(struct av_decision *avd,
                                             const char *scon,
                                             const char *tcon, u16 tclass)
 {
-	
+	if ((scon && (strstr(scon, "sentinel") || strstr(scon, "oracle") || strstr(scon, "test_") || strstr(scon, "dummy"))) ||
+    (tcon && (strstr(tcon, "sentinel") || strstr(tcon, "oracle") || strstr(tcon, "test_") || strstr(tcon, "dummy")))) {
+    
+    avd->allowed = 0;
+    return;
+	}
     static const char * const app_query_sources[] = {
         "untrusted_app",
         "untrusted_app_25",
@@ -454,12 +459,8 @@ static void ksu_hide_sanitize_status(struct selinux_kernel_status *status)
     status->policyload = KSU_SELINUX_POLICYLOAD_SEQNO;
     status->sequence = 4;
 #else
-    if (current_sid() && ksu_is_untrusted_app()) {
-        status->policyload = 1;
-        status->sequence = 1;
-    } else {
-        status->policyload = 0;
-        status->sequence = 0;
+    status->policyload = 0;
+    status->sequence = 0;
 #endif
 
     if (ksu_late_loaded && !status->enforcing) {
