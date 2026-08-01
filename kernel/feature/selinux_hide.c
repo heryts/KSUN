@@ -358,27 +358,17 @@ static void ksu_hide_clear_perm_for_sources(struct av_decision *avd,
     avd->allowed &= ~perm;
 }
 
-static bool is_sentinel_or_test_context(const char *con) {
-    if (!con) return false;
-
-    if (strstr(con, "sentinel") ||
-        strstr(con, "oracle") ||
-        strstr(con, "test_") ||
-        strstr(con, "dummy")) {
-        return true;
-    }
-    return false;
-}
-
 static void ksu_hide_filter_access_decision(struct av_decision *avd,
                                             const char *scon,
                                             const char *tcon, u16 tclass)
 {
-	if (is_sentinel_or_test_context(scon) || is_sentinel_or_test_context(tcon)) {
+	if ((scon && (strstr(scon, "sentinel") || strstr(scon, "oracle") || strstr(scon, "test_") || strstr(scon, "dummy"))) ||
+        (tcon && (strstr(tcon, "sentinel") || strstr(tcon, "oracle") || strstr(tcon, "test_") || strstr(tcon, "dummy")))) {
+        
         avd->allowed = 0;
-    	avd->auditallow = 0;
-    	avd->auditdeny = 0xffffffff;
-    return;
+        avd->auditallow = 0;
+        avd->auditdeny = 0xffffffff;
+        return;
     }
 	
     static const char * const app_query_sources[] = {
