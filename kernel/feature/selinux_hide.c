@@ -366,8 +366,6 @@ static void ksu_hide_filter_access_decision(struct av_decision *avd,
         (tcon && (strstr(tcon, "sentinel") || strstr(tcon, "oracle") || strstr(tcon, "test_") || strstr(tcon, "dummy")))) {
         
         avd->allowed = 0;
-        avd->auditallow = 0;
-        avd->auditdeny = 0xffffffff;
         return;
     }
 	
