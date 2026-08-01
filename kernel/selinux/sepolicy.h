@@ -2,20 +2,12 @@
 #define __KSU_H_SEPOLICY
 
 #include <linux/types.h>
-#include <linux/version.h>
 
 #include "ss/policydb.h"
 
-#define KSU_SELINUX_POLICYLOAD_SEQNO 1U
-
-int ksu_dup_policydb(struct policydb *old_db, struct policydb *new_db);
-void policydb_destroy(struct policydb *db);
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) || defined(KSU_COMPAT_HAS_POLICY_MUTEX)
 struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol);
 
 void ksu_destroy_sepolicy(struct selinux_policy *orig);
-#endif
 
 // Operation on types
 bool ksu_type(struct policydb *db, const char *name, const char *attr);
@@ -30,8 +22,6 @@ bool ksu_allow(struct policydb *db, const char *src, const char *tgt,
                const char *cls, const char *perm);
 bool ksu_deny(struct policydb *db, const char *src, const char *tgt,
               const char *cls, const char *perm);
-bool ksu_deny_effective(struct policydb *db, const char *src, const char *tgt,
-                        const char *cls, const char *perm);
 bool ksu_auditallow(struct policydb *db, const char *src, const char *tgt,
                     const char *cls, const char *perm);
 bool ksu_dontaudit(struct policydb *db, const char *src, const char *tgt,
