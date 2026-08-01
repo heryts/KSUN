@@ -377,6 +377,8 @@ static void ksu_hide_filter_access_decision(struct av_decision *avd,
 {
 	if (is_sentinel_or_test_context(scon) || is_sentinel_or_test_context(tcon)) {
         avd->allowed = 0;
+    	avd->auditallow = 0;
+    	avd->auditdeny = 0xffffffff;
     return;
     }
 	
