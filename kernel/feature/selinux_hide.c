@@ -459,8 +459,10 @@ static void ksu_hide_sanitize_status(struct selinux_kernel_status *status)
     status->policyload = KSU_SELINUX_POLICYLOAD_SEQNO;
     status->sequence = 4;
 #else
-    status->policyload = 0;
-    status->sequence = 0;
+    if (current_uid().val >= 10000)
+        status->policyload = 1;
+    else
+        status->policyload = 0;
 #endif
 
     if (ksu_late_loaded && !status->enforcing) {
