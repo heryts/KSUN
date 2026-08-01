@@ -270,6 +270,14 @@ static bool ksu_hide_should_mask_context(const char *ctx, size_t ctx_len)
         "magisk_file",
         "xposed_data",
         "xposed_file",
+		"droidspaces",
+        "droidspaces_file",
+        "droidspaces_exec",
+        "ds_file",
+        "ds_exec",
+        "container_file",
+        "untrusted_app_all",
+		
     };
 
     return ksu_context_type_is_any_bounded(ctx, ctx_len, hidden_types,
@@ -391,6 +399,18 @@ static void ksu_hide_filter_access_decision(struct av_decision *avd,
                                     app_query_sources,
                                     ARRAY_SIZE(app_query_sources),
                                     "lsposed_file", "file", "read");
+	ksu_hide_clear_perm_for_sources(avd, scon, tcon, tclass,
+                                    app_query_sources,
+                                    ARRAY_SIZE(app_query_sources),
+                                    "droidspaces_file", "file", "read");
+    ksu_hide_clear_perm_for_sources(avd, scon, tcon, tclass,
+                                    app_query_sources,
+                                    ARRAY_SIZE(app_query_sources),
+                                    "droidspaces_file", "dir", "search");
+	ksu_hide_clear_perm_for_sources(avd, scon, tcon, tclass,
+                                    app_query_sources,
+                                    ARRAY_SIZE(app_query_sources),
+                                    "droidspaces", "process", "transition");
     ksu_hide_clear_perm(avd, scon, tcon, tclass, "dex2oat",
                         "dex2oat_exec", "file", "execute_no_trans");
     ksu_hide_clear_perm(avd, scon, tcon, tclass, "kernel",
