@@ -363,7 +363,6 @@ static bool is_sentinel_or_test_context(const char *con) {
 
     if (strstr(con, "sentinel") ||
         strstr(con, "oracle") ||
-        strstr(con, "duckdetector") ||
         strstr(con, "test_") ||
         strstr(con, "dummy")) {
         return true;
