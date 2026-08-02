@@ -603,12 +603,26 @@ static void hook_selinux_status(void)
     }
 }
 
+static int ksu_handle_selinuxfs_write(const char *buf, size_t count)
+{
+    (void)buf;
+    (void)count;
+    if (is_app_zygote(current_cred())) {
+        return -EINVAL;
+    }
+    return 0;
+}
+
 static ssize_t my_write_context(struct file *file, char *buf, size_t size)
 {
     if (likely(current_uid().val < 10000)) {
         return orig_context_write(file, buf, size);
     }
 
+	if (ksu_handle_selinuxfs_write(buf, size)) {
+        return -EINVAL;
+    }
+	
     if (ksu_hide_should_mask_context(buf, size)) {
         return -EINVAL;
     }
@@ -658,6 +672,9 @@ static ssize_t my_write_access(struct file *file, char *buf, size_t size)
 {
     if (likely(current_uid().val < 10000)) {
         return orig_access_write(file, buf, size);
+    }
+	if (ksu_handle_selinuxfs_write(buf, size)) {
+        return -EINVAL;
     }
     char *scon = NULL, *tcon = NULL;
     u32 ssid, tsid;
