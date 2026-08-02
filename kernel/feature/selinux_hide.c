@@ -447,6 +447,17 @@ static void ksu_hide_filter_access_decision(struct av_decision *avd,
                         "adb_data_file", "dir", "search");
 }
 
+static bool ksu_is_app_zygote(const struct cred *cred)
+{
+    if (!cred)
+        return false;
+
+    return !strcmp(current->comm, "zygote") ||
+           !strcmp(current->comm, "zygote64") ||
+           !strcmp(current->comm, "usap32") ||
+           !strcmp(current->comm, "usap64");
+}
+
 static inline bool is_app_zygote(const struct cred *cred)
 {
     return ksu_is_app_zygote(cred);
