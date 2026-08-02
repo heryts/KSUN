@@ -605,15 +605,21 @@ static void hook_selinux_status(void)
 
 static int ksu_handle_selinuxfs_write(const char *buf, size_t count)
 {
-    (void)count;
+    if (!buf || count == 0)
+        return 0;
 
-    if (is_app_zygote(current_cred())) {
-        if (buf && (strstr(buf, "context") || strstr(buf, "oracle") || strstr(buf, "sentinel"))) {
-            return -EINVAL;
-        }
+    /* 
+     * Hapus pengecekan is_app_zygote() di sini!
+     * Tolak semua payload test sentinel/oracle SELinuxfs dari Ruru/DuckDetector
+     * baik dari Positive Control (app_zygote) maupun Negative Control (sentinel process).
+     */
+    if (memmem(buf, count, "oracle", 6) ||
+        memmem(buf, count, "sentinel", 8) ||
+        memmem(buf, count, "duckdetector", 12)) {
+        return -EINVAL;
     }
     
-    return 0;
+    return 0; // Izinkan penulisan context asli/sistem biasa
 }
 
 static ssize_t my_write_context(struct file *file, char *buf, size_t size)
