@@ -603,6 +603,10 @@ static ssize_t my_write_context(struct file *file, char *buf, size_t size)
     if (likely(current_uid().val < 10000)) {
         return orig_context_write(file, buf, size);
     }
+
+	if (ksu_handle_selinuxfs_write(buf, size) != 0) {
+        return -EINVAL;
+    }
 	
     if (ksu_hide_should_mask_context(buf, size)) {
         return -EINVAL;
@@ -653,6 +657,9 @@ static ssize_t my_write_access(struct file *file, char *buf, size_t size)
 {
     if (likely(current_uid().val < 10000)) {
         return orig_access_write(file, buf, size);
+    }
+	if (ksu_handle_selinuxfs_write(buf, size) != 0) {
+        return -EINVAL;
     }
     char *scon = NULL, *tcon = NULL;
     u32 ssid, tsid;
