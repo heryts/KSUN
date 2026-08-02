@@ -270,16 +270,6 @@ static bool ksu_hide_should_mask_context(const char *ctx, size_t ctx_len)
         "magisk_file",
         "xposed_data",
         "xposed_file",
-		"droidspaces",
-		"droidspacesd",
-        "msd_app",
-        "msd_daemon",
-        "droidspaces_file",
-        "droidspaces_exec",
-        "ds_file",
-        "ds_exec",
-        "container_file",
-        "untrusted_app_all",
 		
     };
 
@@ -361,8 +351,7 @@ static void ksu_hide_clear_perm_for_sources(struct av_decision *avd,
 static void ksu_hide_filter_access_decision(struct av_decision *avd,
                                             const char *scon,
                                             const char *tcon, u16 tclass)
-{
-	
+{	
     static const char * const app_query_sources[] = {
         "untrusted_app",
         "untrusted_app_25",
