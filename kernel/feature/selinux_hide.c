@@ -3,6 +3,7 @@
 #include "linux/jump_label.h"
 #include "selinux/sepolicy.h"
 #include <linux/cred.h>
+#include <linux/sched.h>
 #include <linux/cpu.h>
 #include <linux/memory.h>
 #include <linux/uaccess.h>
@@ -446,6 +447,11 @@ static void ksu_hide_filter_access_decision(struct av_decision *avd,
                         "adb_data_file", "dir", "search");
 }
 
+static inline bool is_app_zygote(const struct cred *cred)
+{
+    return ksu_is_app_zygote(cred);
+}
+
 static void ksu_hide_sanitize_status(struct selinux_kernel_status *status)
 {
     if (!status) return;
@@ -456,6 +462,8 @@ static void ksu_hide_sanitize_status(struct selinux_kernel_status *status)
 #else
     status->policyload = 1;
     status->sequence = 0;
+	if (is_app_zygote(current_cred()))
+        status->sequence = 1;
 #endif
 
     if (ksu_late_loaded && !status->enforcing) {
