@@ -90,7 +90,6 @@ bool allow_shell = true;
 #else
 bool allow_shell = false;
 #endif
-/* PATCH: Gunakan izin hak akses 0 untuk menyembunyikan parameter dari /sys/module/kernelsu/parameters/ */
 module_param(allow_shell, bool, 0);
 
 bool ksu_no_custom_rc = false;
@@ -213,14 +212,10 @@ int __init kernelsu_init(void)
 		ksu_file_wrapper_init();
 	}
 
-/* PATCH UTAMA: Paksa penghapusan kobject sysfs modul untuk menyembunyikan jejak /sys/module/kernelsu permanen */
 #ifdef MODULE
+#ifndef CONFIG_KSU_DEBUG
 	kobject_del(&THIS_MODULE->mkobj.kobj);
-#else
-	// Jika built-in kernel, cari dan hapus kobject kernelsu jika terdaftar secara statis
-	if (THIS_MODULE && &THIS_MODULE->mkobj.kobj) {
-		kobject_del(&THIS_MODULE->mkobj.kobj);
-	}
+#endif
 #endif
 	return 0;
 }
