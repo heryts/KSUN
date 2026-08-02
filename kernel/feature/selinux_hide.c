@@ -3,7 +3,6 @@
 #include "linux/jump_label.h"
 #include "selinux/sepolicy.h"
 #include <linux/cred.h>
-#include <linux/sched.h>
 #include <linux/cpu.h>
 #include <linux/memory.h>
 #include <linux/uaccess.h>
@@ -447,22 +446,6 @@ static void ksu_hide_filter_access_decision(struct av_decision *avd,
                         "adb_data_file", "dir", "search");
 }
 
-static bool ksu_is_app_zygote(const struct cred *cred)
-{
-    if (!cred)
-        return false;
-
-    return !strcmp(current->comm, "zygote") ||
-           !strcmp(current->comm, "zygote64") ||
-           !strcmp(current->comm, "usap32") ||
-           !strcmp(current->comm, "usap64");
-}
-
-static inline bool is_app_zygote(const struct cred *cred)
-{
-    return ksu_is_app_zygote(cred);
-}
-
 static void ksu_hide_sanitize_status(struct selinux_kernel_status *status)
 {
     if (!status) return;
@@ -473,8 +456,6 @@ static void ksu_hide_sanitize_status(struct selinux_kernel_status *status)
 #else
     status->policyload = 1;
     status->sequence = 0;
-	if (is_app_zygote(current_cred()))
-        status->sequence = 1;
 #endif
 
     if (ksu_late_loaded && !status->enforcing) {
@@ -610,11 +591,6 @@ static int ksu_handle_selinuxfs_write(const char *buf, size_t count)
     if (!buf)
         return 0;
 
-    /* 
-     * Tanpa is_app_zygote! 
-     * Berlaku secara global agar Positive Control & Negative Control
-     * milik Ruru mendapati respon yang persis sama (-EINVAL).
-     */
     if (strstr(buf, "oracle") || strstr(buf, "sentinel")) {
         return -EINVAL;
     }
@@ -626,10 +602,6 @@ static ssize_t my_write_context(struct file *file, char *buf, size_t size)
 {
     if (likely(current_uid().val < 10000)) {
         return orig_context_write(file, buf, size);
-    }
-
-	if (ksu_handle_selinuxfs_write(buf, size) != 0) {
-        return -EINVAL;
     }
 	
     if (ksu_hide_should_mask_context(buf, size)) {
@@ -681,9 +653,6 @@ static ssize_t my_write_access(struct file *file, char *buf, size_t size)
 {
     if (likely(current_uid().val < 10000)) {
         return orig_access_write(file, buf, size);
-    }
-	if (ksu_handle_selinuxfs_write(buf, size) != 0) {
-        return -EINVAL;
     }
     char *scon = NULL, *tcon = NULL;
     u32 ssid, tsid;
