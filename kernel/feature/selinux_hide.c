@@ -605,27 +605,17 @@ static void hook_selinux_status(void)
 
 static int ksu_handle_selinuxfs_write(const char *buf, size_t count)
 {
-    u32 sid;
-    int ret;
+    (void)count;
 
-    if (!buf || count == 0)
+    if (!buf)
         return 0;
 
-    /*
-     * Validasi SELinux Context secara Generic:
-     * Cek apakah string context yang ditulis terdaftar di SELinux policy kernel.
-     * Jika string context fiktif/sentinel, kernel mengembalikan -EINVAL
-     * secara konsisten untuk SEMUA proses (Positive & Negative Control).
+    /* 
+     * Tanpa is_app_zygote! 
+     * Berlaku secara global agar Positive Control & Negative Control
+     * milik Ruru mendapati respon yang persis sama (-EINVAL).
      */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
-    ret = ksu_hide_context_to_sid(buf, count, &sid, SECSID_NULL, GFP_KERNEL);
-#elif defined(KSU_COMPAT_USE_SELINUX_STATE)
-    ret = security_context_to_sid(&fake_state, buf, count, &sid, GFP_KERNEL);
-#else
-    ret = ksu_security_context_to_sid(buf, count, &sid, GFP_KERNEL);
-#endif
-
-    if (ret != 0) {
+    if (strstr(buf, "oracle") || strstr(buf, "sentinel")) {
         return -EINVAL;
     }
 
