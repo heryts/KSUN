@@ -449,7 +449,10 @@ static void ksu_hide_filter_access_decision(struct av_decision *avd,
 
 static inline bool is_app_zygote(const struct cred *cred)
 {
-    return ksu_is_app_zygote(cred);
+    if (current && current->comm) {
+        return strstr(current->comm, "app_zygote") != NULL;
+    }
+    return false;
 }
 
 static void ksu_hide_sanitize_status(struct selinux_kernel_status *status)
